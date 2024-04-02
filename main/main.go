@@ -10,15 +10,15 @@ import (
 	"os"
 )
 
-type StoryArc struct {
-	Page struct {
-		Title    string   `json:"title"`
-		StoryArc []string `json:"story"`
-		Options  []struct {
-			Text string `json:text`
-			Arc  string `json:arc`
-		} `json:"options"`
-	}
+type Option struct {
+	Text string `json:text`
+	Arc  string `json:arc`
+}
+
+type StoryPage struct {
+	Title     string   `json:"title"`
+	StoryText []string `json:"story"`
+	Options   []Option `json:"options"`
 }
 
 func readJSON(filename string) ([]byte, error) {
@@ -38,9 +38,9 @@ func readJSON(filename string) ([]byte, error) {
 	return doc, nil
 }
 
-func parseJSON(jsonBytes []byte) (map[string]StoryArc, error) {
+func parseJSON(jsonBytes []byte) (map[string]StoryPage, error) {
 
-	story := &map[string]StoryArc{}
+	story := &map[string]StoryPage{}
 
 	if err := json.Unmarshal(jsonBytes, &story); err != nil {
 		return nil, err
@@ -49,7 +49,7 @@ func parseJSON(jsonBytes []byte) (map[string]StoryArc, error) {
 	return *story, nil
 }
 
-func createMux(story map[string]StoryArc) (http.Handler, error) {
+func createMux(story map[string]StoryPage) (http.Handler, error) {
 
 	mux := http.NewServeMux()
 
@@ -59,8 +59,15 @@ func createMux(story map[string]StoryArc) (http.Handler, error) {
 	}
 
 	for page, storyArc := range story {
-		http.HandleFunc("/"+page, func(w http.ResponseWriter, r *http.Request) {
-			template.Execute(w, storyArc)
+		page := page
+		storyArc := storyArc
+		mux.HandleFunc("/"+page, func(w http.ResponseWriter, r *http.Request) {
+			err := template.Execute(w, storyArc)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError) // Set the status code
+				http.Error(w, fmt.Sprintf("Template execution error: %v", err), http.StatusInternalServerError)
+				return // Return to prevent further writes to the response writer
+			}
 		})
 	}
 
